@@ -1,0 +1,49 @@
+name: FJ feed capture
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: fj-capture
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Poll the feed
+        run: python fj_logger.py
+
+      - name: Commit anything new
+        run: |
+          git config user.name  "fj-bot"
+          git config user.email "fj-bot@users.noreply.github.com"
+          git add -A daily index.csv recent_48h.csv .fj_state 2>/dev/null || git add -A
+          if git diff --staged --quiet; then
+            echo "No new headlines this run."
+            exit 0
+          fi
+          git commit -m "feed: $(date -u '+%Y-%m-%d %H:%M UTC')"
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && \
+            git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            echo "Push attempt $i failed, retrying..."
+            sleep 5
+          done
+          echo "Could not push after 3 attempts."
+          exit 1
