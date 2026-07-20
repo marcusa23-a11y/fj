@@ -5,10 +5,6 @@ on:
     - cron: "*/5 * * * *"
   workflow_dispatch:
 
-concurrency:
-  group: fj-capture
-  cancel-in-progress: false
-
 permissions:
   contents: write
 
